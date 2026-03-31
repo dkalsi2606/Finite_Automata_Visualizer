@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finite Automata Visualiser</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Syne:wght@400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d0f14;
+    --bg2:      #13161e;
+    --bg3:      #1a1e28;
+    --bg4:      #222736;
+    --bdr:      rgba(255,255,255,0.07);
+    --bdr2:     rgba(255,255,255,0.14);
+    --txt:      #e8eaf0;
+    --txt2:     #8b90a0;
+    --txt3:     #555a6a;
+    --acc:      #5b8df6;
+    --acc2:     #3d6ed4;
+    --grn:      #3dd68c;
+    --red:      #f05c5c;
+    --amb:      #f0a050;
+    --pur:      #a78bfa;
+    --teal:     #2dd4bf;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'Syne', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--txt);
+    font-family: var(--mono);
+    overflow: hidden;
+  }
+
+  /* ---- Layout ---- */
+  .app {
+    display: grid;
+    grid-template-rows: 52px 1fr;
+    height: 100vh;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--bdr);
+    gap: 16px;
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+
+  header .logo {
+    font-family: var(--sans);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--txt);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  header .logo .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--acc);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(0.7)} }
+
+  header .sep { flex: 1; }
+
+  header .badge {
+    font-size: 11px;
+    color: var(--txt3);
+    padding: 3px 8px;
+    border: 1px solid var(--bdr);
+    border-radius: 4px;
+    letter-spacing: .05em;
+  }
+
+  .body {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    overflow: hidden;
+  }
+
+  /* ---- Canvas ---- */
+  .canvas-wrap {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(91,141,246,0.04) 0%, transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(167,139,250,0.03) 0%, transparent 50%);
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .canvas-tools {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .canvas-hint {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--txt3);
+    pointer-events: none;
+    letter-spacing: .04em;
+  }
+
+  /* ---- Panel ---- */
+  .panel {
+    background: var(--bg2);
+    border-left: 1px solid var(--bdr);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .panel::-webkit-scrollbar { width: 4px; }
+  .panel::-webkit-scrollbar-track { background: transparent; }
+  .panel::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 2px; }
+
+  .section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--bdr);
+  }
+
+  .section-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--txt3);
+    margin-bottom: 10px;
+    font-family: var(--sans);
+  }
+
+  /* ---- Buttons ---- */
+  button {
+    font-family: var(--mono);
+    font-size: 12px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--bdr2);
+    background: var(--bg3);
+    color: var(--txt2);
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+    white-space: nowrap;
+  }
+
+  button:hover { background: var(--bg4); color: var(--txt); border-color: rgba(255,255,255,0.2); }
+  button.active { background: var(--acc); color: #fff; border-color: var(--acc); }
+  button.active:hover { background: var(--acc2); border-color: var(--acc2); }
+  button.danger { border-color: rgba(240,92,92,0.3); color: var(--red); }
+  button.danger:hover { background: rgba(240,92,92,0.15); border-color: var(--red); }
+  button.primary { background: var(--acc); color: #fff; border-color: var(--acc); }
+  button.primary:hover { background: var(--acc2); }
+  button.sm { font-size: 11px; height: 24px; padding: 0 8px; border-radius: 4px; }
+
+  /* ---- Inputs ---- */
+  input, select {
+    font-family: var(--mono);
+    font-size: 12px;
+    height: 30px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--bdr2);
+    background: var(--bg3);
+    color: var(--txt);
+    outline: none;
+    transition: border-color .15s;
+    width: 100%;
+  }
+
+  input:focus, select:focus { border-color: var(--acc); }
+  input::placeholder { color: var(--txt3); }
+  select option { background: var(--bg3); }
+
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row + .row { margin-top: 6px; }
+  .flex1 { flex: 1; min-width: 0; }
+
+  /* ---- State list ---- */
+  .state-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--bdr);
+  }
+  .state-item:last-child { border-bottom: none; }
+  .state-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--txt);
+    min-width: 32px;
+  }
+  .state-flags { display: flex; gap: 3px; flex: 1; }
+
+  /* ---- Transition tags ---- */
+  .trans-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px 3px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    background: var(--bg3);
+    border: 1px solid var(--bdr);
+    color: var(--txt2);
+    margin: 2px;
+  }
+  .trans-tag .rm {
+    cursor: pointer;
+    color: var(--txt3);
+    font-size: 13px;
+    line-height: 1;
+    transition: color .1s;
+  }
+  .trans-tag .rm:hover { color: var(--red); }
+
+  /* ---- Result ---- */
+  .result {
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 11px;
+    line-height: 1.7;
+    margin-top: 8px;
+  }
+  .result.accept { background: rgba(61,214,140,.08); color: var(--grn); border: 1px solid rgba(61,214,140,.2); }
+  .result.reject { background: rgba(240,92,92,.08); color: var(--red); border: 1px solid rgba(240,92,92,.2); }
+  .result.info   { background: var(--bg3); color: var(--txt3); border: 1px solid var(--bdr); }
+
+  .trace-step { display: inline-flex; align-items: center; gap: 3px; }
+  .trace-st { padding: 0 5px; border-radius: 3px; background: var(--bg4); color: var(--txt2); font-size: 10px; }
+  .trace-ch { color: var(--acc); }
+
+  /* ---- Misc ---- */
+  .empty { font-size: 11px; color: var(--txt3); padding: 4px 0; }
+  .divider { height: 1px; background: var(--bdr); margin: 8px 0; }
+
+  .tag-wrap { display: flex; flex-wrap: wrap; min-height: 20px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <span class="dot"></span>
+      FA Visualiser — Daksh Kalsi 2024UCA1860
+    </div>
+    <span class="sep"></span>
+    <span class="badge">NFA / DFA</span>
+  </header>
+
+  <div class="body">
+    <!-- Canvas -->
+    <div class="canvas-wrap">
+      <div class="canvas-tools">
+        <button class="active" id="btn-addState" onclick="setTool('addState')">+ State</button>
+        <button id="btn-addTrans" onclick="setTool('addTrans')">→ Transition</button>
+        <button id="btn-select" onclick="setTool('select')">✎ Move</button>
+        <span style="width:1px;height:20px;background:var(--bdr2);margin:0 2px"></span>
+        <button class="danger sm" onclick="clearAll()">✕ Clear</button>
+      </div>
+      <canvas id="fa-canvas"></canvas>
+      <div class="canvas-hint" id="canvas-hint">Click canvas to add a state</div>
+    </div>
+
+    <!-- Panel -->
+    <div class="panel">
+
+      <!-- States -->
+      <div class="section">
+        <div class="section-title">States</div>
+        <div id="state-list"></div>
+        <div class="empty" id="state-empty">No states yet. Use "+ State" tool.</div>
+        <div style="margin-top:8px">
+          <div class="row">
+            <input type="text" id="new-state-name" placeholder="State name (e.g. q3)" class="flex1">
+            <button class="primary" onclick="addStateFromInput()">Add</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transitions -->
+      <div class="section">
+        <div class="section-title">Transitions</div>
+        <div class="row">
+          <select id="t-from" class="flex1"><option value="">From</option></select>
+          <select id="t-to" class="flex1"><option value="">To</option></select>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <input type="text" id="t-sym" placeholder="Symbol(s) e.g. a,b,ε or eps" class="flex1">
+          <button class="primary" onclick="addTransitionUI()">Add</button>
+        </div>
+        <div class="divider"></div>
+        <div class="tag-wrap" id="trans-list"></div>
+        <div class="empty" id="trans-empty">No transitions yet.</div>
+      </div>
+
+      <!-- Run string -->
+      <div class="section">
+        <div class="section-title">Simulate</div>
+        <div class="row">
+          <input type="text" id="run-input" placeholder="Input string, e.g. aab" class="flex1">
+          <button class="primary" onclick="runString()">Run</button>
+        </div>
+        <div class="result info" id="run-result">Enter a string and press Run</div>
+      </div>
+
+      <!-- Help -->
+      <div class="section" style="border-bottom:none">
+        <div class="section-title">Tips</div>
+        <div style="font-size:11px;color:var(--txt3);line-height:1.8">
+          • Double-click a state to toggle accept<br>
+          • Click canvas with "+ State" to place states<br>
+          • "→ Transition" → click from, then to<br>
+          • ε-transitions: type ε (or eps / epsilon / e)<br>
+          • Right-click a state to delete it
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('fa-canvas');
+const ctx = canvas.getContext('2d');
+
+let states = [], transitions = [], selected = null, tool = 'addState';
+let transStart = null, dragging = null, dragOff = {x:0,y:0};
+let stateCounter = 0;
+
+// Resize
+function resize() {
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  draw();
+}
+window.addEventListener('resize', resize);
+setTimeout(resize, 30);
+
+// --- Tool ---
+function setTool(t) {
+  tool = t; transStart = null;
+  ['addState','addTrans','select'].forEach(n => {
+    const btn = document.getElementById('btn-' + n);
+    if (btn) btn.classList.toggle('active', t === n);
+  });
+  const hints = {
+    addState: 'Click canvas to place a state',
+    addTrans: 'Click source state → click destination state',
+    select:   'Click to select · drag to move · double-click to toggle accept'
+  };
+  document.getElementById('canvas-hint').textContent = hints[t] || '';
+  draw();
+}
+
+// --- State operations ---
+function addState(x, y, name) {
+  const n = name || 'q' + stateCounter++;
+  if (states.find(s => s.id === n)) return;
+  states.push({ id: n, x, y, start: states.length === 0, accept: false });
+  refreshUI(); draw();
+}
+function addStateFromInput() {
+  const inp = document.getElementById('new-state-name');
+  const name = inp.value.trim();
+  const cx = 80 + Math.random() * (canvas.width - 160);
+  const cy = 80 + Math.random() * (canvas.height - 160);
+  addState(cx, cy, name || undefined);
+  inp.value = '';
+}
+function toggleAccept(id) {
+  const s = states.find(s => s.id === id);
+  if (s) s.accept = !s.accept;
+  draw(); refreshUI();
+}
+function toggleStart(id) {
+  states.forEach(s => s.start = false);
+  const s = states.find(s => s.id === id);
+  if (s) s.start = true;
+  draw(); refreshUI();
+}
+function deleteState(id) {
+  states = states.filter(s => s.id !== id);
+  transitions = transitions.filter(t => t.from !== id && t.to !== id);
+  if (selected === id) selected = null;
+  if (transStart === id) transStart = null;
+  refreshUI(); draw();
+}
+
+function addTransitionUI() {
+  const f = document.getElementById('t-from').value;
+  const t = document.getElementById('t-to').value;
+  const sym = document.getElementById('t-sym').value.trim();
+  if (!f || !t || !sym) { alert('Select from/to states and enter a symbol.'); return; }
+  sym.split(',').map(s => s.trim()).filter(Boolean).forEach(s => {
+    let normalized = s.toLowerCase();
+    if (normalized === 'epsilon' || normalized === 'eps' || normalized === 'e') {
+      normalized = 'ε';
+    }
+    if (!transitions.find(x => x.from === f && x.to === t && x.sym === normalized))
+      transitions.push({ from: f, to: t, sym: normalized });
+  });
+  document.getElementById('t-sym').value = '';
+  refreshUI(); draw();
+}
+function deleteTransition(f, t, s) {
+  transitions = transitions.filter(x => !(x.from === f && x.to === t && x.sym === s));
+  refreshUI(); draw();
+}
+function clearAll() {
+  states = []; transitions = []; selected = null; stateCounter = 0; transStart = null;
+  refreshUI(); draw();
+}
+
+// --- UI refresh ---
+function refreshUI() {
+  const sl = document.getElementById('state-list');
+  const se = document.getElementById('state-empty');
+  sl.innerHTML = '';
+  se.style.display = states.length ? 'none' : '';
+
+  states.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'state-item';
+    div.innerHTML = `
+      <span class="state-name">${s.id}</span>
+      <div class="state-flags">
+        <button class="sm ${s.start ? 'active' : ''}" onclick="toggleStart('${s.id}')" title="Set as start state">▶</button>
+        <button class="sm ${s.accept ? 'active' : ''}" onclick="toggleAccept('${s.id}')" title="Toggle accept state">★</button>
+      </div>
+      <button class="sm danger" onclick="deleteState('${s.id}')" title="Delete state">✕</button>`;
+    sl.appendChild(div);
+  });
+
+  ['t-from','t-to'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">${id==='t-from'?'From':'To'}</option>` +
+      states.map(s => `<option value="${s.id}" ${s.id===cur?'selected':''}>${s.id}</option>`).join('');
+  });
+
+  const tl = document.getElementById('trans-list');
+  const te = document.getElementById('trans-empty');
+  tl.innerHTML = '';
+  te.style.display = transitions.length ? 'none' : '';
+  transitions.forEach(({from,to,sym}) => {
+    const tag = document.createElement('span');
+    tag.className = 'trans-tag';
+    tag.innerHTML = `<span style="color:var(--acc)">${from}</span><span style="color:var(--txt3)">→</span><span style="color:var(--teal)">${to}</span><span style="color:var(--txt3)">:</span><span style="color:var(--amb)">${sym}</span>
+      <span class="rm" onclick="deleteTransition('${from}','${to}','${sym}')">×</span>`;
+    tl.appendChild(tag);
+  });
+}
+
+// --- Drawing ---
+const R = 26;
+const COLORS = {
+  state:         '#1e2235',
+  stateStroke:   '#3a4060',
+  stateSel:      '#5b8df6',
+  stateSelFill:  '#1a2a50',
+  stateStart:    '#152040',
+  stateHigh:     '#133328',
+  stateHighStr:  '#3dd68c',
+  accept:        '#5b8df6',
+  arrow:         '#4a5070',
+  arrowHigh:     '#3dd68c',
+  labelBg:       '#13161e',
+  label:         '#8b96c0',
+  labelHigh:     '#3dd68c',
+  startArrow:    '#5b8df6',
+  stateText:     '#c8cde0',
+};
+
+function draw(highlight) {
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Grid dots
+  ctx.fillStyle = 'rgba(255,255,255,0.025)';
+  for (let x = 40; x < canvas.width; x += 40)
+    for (let y = 40; y < canvas.height; y += 40)
+      ctx.fillRect(x, y, 1, 1);
+
+  transitions.forEach(tr => {
+    const fs = states.find(s => s.id === tr.from);
+    const ts = states.find(s => s.id === tr.to);
+    if (!fs || !ts) return;
+    const bid = transitions.some(x => x.from === tr.to && x.to === tr.from);
+    const isH = highlight && highlight.from === tr.from && highlight.to === tr.to && highlight.sym === tr.sym;
+    drawArrow(fs, ts, tr.sym, bid, isH, tr.from === tr.to);
+  });
+
+  states.forEach(s => {
+    const isH = highlight && highlight.state === s.id;
+    drawState(s, s.id === selected, isH);
+  });
+
+  if (transStart) {
+    const ts = states.find(s => s.id === transStart);
+    if (ts) {
+      ctx.beginPath();
+      ctx.arc(ts.x, ts.y, R + 10, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(91,141,246,0.35)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4,3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+}
+
+function drawState(s, isSel, isH) {
+  ctx.save();
+  const fillColor = isH ? COLORS.stateHigh : (isSel ? COLORS.stateSelFill : (s.start ? COLORS.stateStart : COLORS.state));
+  const strokeColor = isH ? COLORS.stateHighStr : (isSel ? COLORS.stateSel : COLORS.stateStroke);
+  const lw = isSel || isH ? 2 : 1;
+
+  // Glow
+  if (isSel || isH) {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, R + 8, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(s.x, s.y, R-2, s.x, s.y, R+8);
+    g.addColorStop(0, isH ? 'rgba(61,214,140,0.2)' : 'rgba(91,141,246,0.2)');
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, R, 0, Math.PI * 2);
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+
+  if (s.accept) {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, R - 5, 0, Math.PI * 2);
+    ctx.strokeStyle = isH ? 'rgba(61,214,140,0.6)' : (isSel ? 'rgba(91,141,246,0.7)' : 'rgba(200,210,255,0.35)');
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  if (s.start) {
+    const ax = s.x - R - 20;
+    ctx.beginPath();
+    ctx.moveTo(ax, s.y);
+    ctx.lineTo(s.x - R - 1, s.y);
+    ctx.strokeStyle = COLORS.startArrow;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // arrowhead
+    ctx.beginPath();
+    ctx.moveTo(s.x - R - 1, s.y);
+    ctx.lineTo(s.x - R - 7, s.y - 4);
+    ctx.lineTo(s.x - R - 7, s.y + 4);
+    ctx.closePath();
+    ctx.fillStyle = COLORS.startArrow;
+    ctx.fill();
+  }
+
+  ctx.fillStyle = isH ? '#fff' : (isSel ? '#c8dcff' : COLORS.stateText);
+  ctx.font = '500 12px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(s.id, s.x, s.y);
+  ctx.restore();
+}
+
+function drawArrow(fs, ts, sym, bend, isH, self) {
+  ctx.save();
+  const col = isH ? COLORS.arrowHigh : COLORS.arrow;
+  ctx.strokeStyle = col;
+  ctx.fillStyle = col;
+  ctx.lineWidth = isH ? 2 : 1;
+
+  if (self) {
+    // Self-loop
+    const lx = fs.x, ly = fs.y - R;
+    ctx.beginPath();
+    ctx.arc(lx, ly - 20, 18, 0.4, Math.PI - 0.4);
+    ctx.stroke();
+    // head
+    const hx = lx + Math.cos(Math.PI - 0.4) * 18 + lx - lx;
+    const hy = (ly - 20) + Math.sin(Math.PI - 0.4) * 18;
+    drawArrowHead(lx + 16, ly - 5, 1.9, col);
+    drawLabel(sym, lx, ly - 44, isH);
+  } else if (bend) {
+    const dx = ts.x - fs.x, dy = ts.y - fs.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    const nx = -dy/dist * 22, ny = dx/dist * 22;
+    const mx = (fs.x+ts.x)/2 + nx, my = (fs.y+ts.y)/2 + ny;
+    const angS = Math.atan2(my - fs.y, mx - fs.x);
+    const angE = Math.atan2(ts.y - my, ts.x - mx);
+    const sx = fs.x + Math.cos(angS)*R, sy = fs.y + Math.sin(angS)*R;
+    const ex = ts.x - Math.cos(angE)*(R+1), ey = ts.y - Math.sin(angE)*(R+1);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(mx, my, ex, ey);
+    ctx.stroke();
+    drawArrowHead(ex, ey, Math.atan2(ey - my, ex - mx), col);
+    drawLabel(sym, mx + nx*0.25, my + ny*0.25, isH);
+  } else {
+    const ang = Math.atan2(ts.y - fs.y, ts.x - fs.x);
+    const sx = fs.x + Math.cos(ang)*R, sy = fs.y + Math.sin(ang)*R;
+    const ex = ts.x - Math.cos(ang)*(R+1), ey = ts.y - Math.sin(ang)*(R+1);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    drawArrowHead(ex, ey, ang, col);
+    const lx = (sx+ex)/2 - Math.sin(ang)*14;
+    const ly = (sy+ey)/2 + Math.cos(ang)*14;
+    drawLabel(sym, lx, ly, isH);
+  }
+  ctx.restore();
+}
+
+function drawArrowHead(x, y, ang, col) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(ang);
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-9, -4);
+  ctx.lineTo(-9, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLabel(sym, x, y, isH) {
+  ctx.save();
+  const text = sym;
+  ctx.font = '11px "JetBrains Mono", monospace';
+  const w = ctx.measureText(text).width + 8;
+  ctx.fillStyle = COLORS.labelBg;
+  ctx.beginPath();
+  ctx.roundRect(x - w/2, y - 8, w, 16, 3);
+  ctx.fill();
+  ctx.fillStyle = isH ? COLORS.labelHigh : COLORS.label;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+// --- Canvas events ---
+function getState(x, y) { return states.find(s => Math.hypot(s.x - x, s.y - y) <= R); }
+
+canvas.addEventListener('mousedown', e => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const hit = getState(x, y);
+  if (tool === 'addState') { if (!hit) addState(x, y); return; }
+  if (tool === 'addTrans') {
+    if (hit) {
+      if (!transStart) { transStart = hit.id; draw(); }
+      else {
+        const sym = prompt('Symbol(s) for transition (comma-separated):', 'a');
+        if (sym) {
+          sym.split(',').map(s => s.trim()).filter(Boolean).forEach(s => {
+            let normalized = s.toLowerCase();
+            if (normalized === 'epsilon' || normalized === 'eps' || normalized === 'e') {
+              normalized = 'ε';
+            }
+            if (!transitions.find(x => x.from === transStart && x.to === hit.id && x.sym === normalized))
+              transitions.push({ from: transStart, to: hit.id, sym: normalized });
+          });
+          refreshUI(); draw();
+        }
+        transStart = null; draw();
+      }
+    } else { transStart = null; draw(); }
+    return;
+  }
+  if (tool === 'select') {
+    if (hit) { selected = hit.id; dragging = hit; dragOff = { x: x - hit.x, y: y - hit.y }; draw(); }
+    else { selected = null; draw(); }
+  }
+});
+canvas.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  dragging.x = e.clientX - rect.left - dragOff.x;
+  dragging.y = e.clientY - rect.top - dragOff.y;
+  draw();
+});
+canvas.addEventListener('mouseup', () => { dragging = null; });
+canvas.addEventListener('dblclick', e => {
+  const rect = canvas.getBoundingClientRect();
+  const hit = getState(e.clientX - rect.left, e.clientY - rect.top);
+  if (hit) toggleAccept(hit.id);
+});
+// Right-click to delete
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const hit = getState(e.clientX - rect.left, e.clientY - rect.top);
+  if (hit) deleteState(hit.id);
+});
+
+// --- NFA simulation ---
+function epsClosure(ids) {
+  const visited = new Set(ids);
+  const stack = [...ids];
+  while (stack.length) {
+    const cur = stack.pop();
+    transitions.filter(t => t.from === cur && t.sym === 'ε').forEach(t => {
+      if (!visited.has(t.to)) { visited.add(t.to); stack.push(t.to); }
+    });
+  }
+  return [...visited];
+}
+function step(ids, sym) {
+  const next = new Set();
+  ids.forEach(id => transitions.filter(t => t.from === id && t.sym === sym).forEach(t => next.add(t.to)));
+  return [...next];
+}
+function runString() {
+  const input = document.getElementById('run-input').value;
+  const res = document.getElementById('run-result');
+  const start = states.find(s => s.start);
+  if (!start) { res.className = 'result reject'; res.textContent = 'No start state defined.'; return; }
+
+  let current = epsClosure([start.id]);
+  const trace = [{ states: [...current], char: null }];
+
+  for (const ch of input) {
+    const moved = step(current, ch);
+    current = epsClosure(moved);
+    trace.push({ states: [...current], char: ch });
+  }
+
+  const accepts = states.filter(s => s.accept).map(s => s.id);
+  const accepted = current.some(id => accepts.includes(id));
+  res.className = 'result ' + (accepted ? 'accept' : 'reject');
+
+  const traceHTML = trace.map((s, i) => {
+    const st = s.states.length ? '{' + s.states.join(',') + '}' : '∅';
+    return `<span class="trace-step">${i ? `<span class="trace-ch">${s.char}</span>→` : ''}<span class="trace-st">${st}</span></span>`;
+  }).join(' ');
+
+  res.innerHTML = `<strong>${accepted ? '✓ Accepted' : '✗ Rejected'}</strong> &nbsp;·&nbsp; <span style="color:var(--txt3)">"${input || '(empty)'}"</span>
+    <div style="margin-top:6px;line-height:2">${traceHTML}</div>`;
+
+  animateTrace(trace, input.split(''));
+}
+
+function animateTrace(steps, chars) {
+  let i = 0;
+  const iv = setInterval(() => {
+    if (i >= steps.length) { clearInterval(iv); draw(); return; }
+    if (steps[i].states.length > 0) {
+      const hl = { state: steps[i].states[0] };
+      if (i > 0) {
+        const tr = transitions.find(t =>
+          steps[i-1].states.includes(t.from) &&
+          steps[i].states.includes(t.to) &&
+          t.sym === chars[i-1]);
+        if (tr) { hl.from = tr.from; hl.to = tr.to; hl.sym = tr.sym; }
+      }
+      draw(hl);
+    } else draw();
+    i++;
+  }, 450);
+}
+
+// --- Init example ---
+setTimeout(() => {
+  addState(100, 200, 'q0');
+  addState(260, 200, 'q1');
+  addState(420, 200, 'q2');
+  states[0].start = true; states[2].accept = true;
+  transitions.push({from:'q0',to:'q1',sym:'a'});
+  transitions.push({from:'q1',to:'q1',sym:'b'});
+  transitions.push({from:'q1',to:'q2',sym:'a'});
+  refreshUI(); draw();
+}, 80);
+</script>
+</body>
+</html>
