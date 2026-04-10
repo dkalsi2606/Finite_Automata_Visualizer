@@ -27,6 +27,7 @@ An interactive web-based tool to design, visualize, and simulate **Deterministic
 * Select **"→ Transition"**
 * Click the source state, then the destination state
 * Enter symbol(s); multiple symbols can be comma-separated
+* **NOTE**- The transition from start to a node at the end of a chain may not be visible. So, drag the states so the diagram is more spread out.
 
 ### Modifying States
 
